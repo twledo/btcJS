@@ -1,0 +1,54 @@
+import ecdsa
+import hashlib
+import base58
+import random
+
+def private_key_to_p2pkh(hex_privkey, compressed=True):
+    """
+    Converte uma chave privada (em hexadecimal) em um endereço P2PKH.
+    """
+    privkey_bytes = bytes.fromhex(hex_privkey)
+    sk = ecdsa.SigningKey.from_string(privkey_bytes, curve=ecdsa.SECP256k1)
+    vk = sk.get_verifying_key()
+    
+    if compressed:
+        pubkey_bytes = vk.to_string()
+        x = pubkey_bytes[:32]
+        y = pubkey_bytes[32:]
+        prefix = b'\x02' if (int.from_bytes(y, 'big') % 2 == 0) else b'\x03'
+        pubkey = prefix + x
+    else:
+        pubkey = b'\x04' + vk.to_string()
+    
+    sha256_pubkey = hashlib.sha256(pubkey).digest()
+    ripemd160 = hashlib.new('ripemd160', sha256_pubkey).digest()
+    versioned_payload = b'\x00' + ripemd160
+    checksum = hashlib.sha256(hashlib.sha256(versioned_payload).digest()).digest()[:4]
+    binary_address = versioned_payload + checksum
+    address = base58.b58encode(binary_address).decode('utf-8')
+    
+    return address
+
+inicio = 0x80000000000000000
+fim = 0xfffffffffffffffff
+
+endereco_alvo = '1MVDYgVaSN6iKKEsbzRUAYFrYJadLYZvvZ'
+
+max_iterations = 1000000000000000000000000000000000
+count = 0
+
+while count < max_iterations:
+    n = random.randint(inicio, fim)  # Escolhe um número aleatório dentro do intervalo
+    hex_privkey = format(n, '064x')
+    address = private_key_to_p2pkh(hex_privkey, compressed=True)
+    
+    if address == endereco_alvo:
+        print(f"Correspondência encontrada!\nChave privada (hex): {hex_privkey}\nEndereço P2PKH: {address}")
+        break
+    
+    if count % 100000 == 0:
+        print(f"Iteração {count}")
+    
+    count += 1
+else:
+    print("Nenhuma correspondência encontrada no intervalo especificado.")
